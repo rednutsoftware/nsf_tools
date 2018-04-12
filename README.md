@@ -1,2 +1,2 @@
 # nsf_tools
-tools for NSF / NSFE format
+command line tools for NSF / NSFE format
