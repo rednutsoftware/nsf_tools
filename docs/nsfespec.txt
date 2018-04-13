@@ -1,0 +1,510 @@
+
+                       Extended Nintendo Sound Format
+                          proposed NSFE File format
+                    ------------------------------------
+                          Revision 2  (Sep. 3, 2003)
+
+
+
+Introduction:
+
+
+
+i)   Why make a new format?
+=====================================
+
+     It does seem kind of silly to revise a format that not only already works
+well, but also has several apps supporting it.  So my rationale for developing
+this format may be confusing.  But I felt that in order for the features I had
+in mind, the existing NSF format just didn't do the job well enough.
+
+     The previous format didn't allow a whole lot of room for expansion.  In
+fact... according to the specifications, there were exactly 4 bytes available
+for future expansion.  And since there was no indication as to the end of the
+music code aside from an EOF, appending data to the end of the file (and
+pointing to it via the 4 available bytes) would cause extra data to be loaded
+into the memory banks of NSF players.
+
+     There was the option of increasing the version number of the NSF file,
+and then adding more room for expansion.  However, that would demand all NSF
+players to update -every time- new features are added.  As long as we're
+forcing a player update... we might as well do it only once... and make future
+expansion easier.  Hence, this new format.
+
+     Conversion between the two formats is a snap.  You can easily convert
+all your NSFs to NSFEs and begin adding timers/playlists to your NSFs.  And
+just as easily drop the added info and convert back to a regular NSF.
+
+
+
+     There are severeal references in the doc to "nsfspec.txt".  This is the 
+official NSF/NESM format specifications by Kevin Horton.  A copy of it can be
+found here:
+
+http://www.tripoint.org/kevtris/nes/nsfspec.txt
+
+     As far as I know that is the most recent version (v1.61, updated 
+June 27, 2000)
+
+
+
+ii)  Differences between NSFE and NSF
+=====================================
+
+     Aside from the increased capability of future expansion, NSFE provides
+several options for the user that makes NSFs flow more like other game music
+files (SPC, PSF, etc).  The most notable are:
+
+- Optional timers for songs
+- Optional Fade-out time
+- Able to arrange the tracks in a playlist.. allowing you to omit tracks
+     and play tracks in the order of your choosing.
+- Labels per track, makes it so you don't have to remember your fav track
+     on the NSF by number.
+
+
+
+
+
+
+
+Format Specifications:
+
+
+
+1)   Type definitions and keywords
+====================================
+
+     Throughout the doc I'll use a few keywords/symbols defined here:
+
+
+0x#### = Numbers preceeded by '0x' are represented in hexadecimal
+
+BYTE = a single byte (8 bits in size), representing unsigned data
+
+UINT = an unsigned integer.. 4 bytes in size, stored low byte first:
+       08 06 02 FF = 0xFF020608
+
+int  = a signed integer.. 4 bytes in size, stored low byte first
+
+WORD = an unsigned integer.. 2 bytes in size, stored low byte first
+
+string = a string of text, terminated with a NULL character (zero),
+         typically, strings shouldn't be any longer than 32 chars,
+         but there's technically no limit (though exceedingly long
+         strings will probably be truncated by players).
+
+'TEXT' = ASCII representation of a UINT.  First character is stored as the
+         first byte:
+       'data' = 64 61 74 61 = 0x61746164
+                d  a  t  a      a t a d
+
+         This is a little backwards from standard C++ notation, where
+         'data' would really equal 0x64617461... but when written to
+         a file with the low byte first, it would appear backwards
+         thus the reason for the reversal.
+
+
+
+2)   The General File Format
+======================================
+
+     The header to NSFE files is very small.. just a single UINT:
+
+'NSFE'
+
+     Following that 4 BYTEs is a series of data chunks.  The file must
+contain at the very minimum the following chunks:
+
+'INFO' - must be before 'DATA' chunk
+'DATA'
+'NEND' - must be the very last chunk
+
+
+     There may be extra chunks included... but these are the bare minimum
+that must be in every file.  The extra chunks may or may not be required
+to be placed before/after certain chunks; it depends on the chunk.  See
+the specific chunk formats for details.
+
+
+     Once the 'NEND' chunk is reached... the entire NSFE file has been
+read.  No chunks should appear after the 'NEND' chunk.
+
+
+     You may notice that NSFEs lack a version number.  This is because
+the chunk system makes a version number obsolete.
+
+
+
+3)   The Chunk format
+=====================================
+
+     Data in NSFEs are stored in a chunk format, similar to WAV, PNG, and
+many other common files.  Each chunk contains the following data:
+
+
+UINT  size of chunk in bytes (does not include this value or the chunk ID)
+UINT  chunk identifier
+...   chunk data (size is determined by the value given above)
+
+
+     The data is interpreted in different ways depeding upon the chunk ID.
+The chunk IDs also follow a certain naming convension:
+
+     If the first byte of the id is between 0x41 and 0x5A (in ASCII:  A to
+ Z), then the chunk is MANDITORY for NSF playback.  If the program comes
+across a chunk it doesn't recognize, and the first byte is within that range.
+Program should not attempt to play the NSF.  However, if the value is
+anything else, the chunk is optional and can be skipped if unsupported.
+
+Examples:
+
+'test' - optional
+'TEST' - manditory
+'tEST' - optional
+'Test' - manditory
+
+
+     If a chunk size is larger than expected, extra bytes can be ignored.
+This allows for future expansion by adding values to specific chunks without
+having to create a new chunk.  If a chunk size is smaller than expected,
+default values can be used to fill unfilled variables.  However, there are a
+few varialbes that are manditory for playback.  See the next section for
+details.
+
+
+
+
+
+4)   Specific Chunk Formats
+=======================================
+
+     As of right now... there are 9 chunk types defined.  Each chunk is
+identified by its 4-byte ID:
+
+Must be in every NSFE file:
+
+'INFO'
+'DATA' - must come after 'INFO'
+'NEND' - must be the very last chunk
+
+May or may not be in every NSFE file:
+
+'plst'
+'time' - must come after 'INFO'
+'fade' - must come after 'INFO'
+'tlbl' - must come after 'INFO'
+'auth'
+'BANK'
+
+     Aside from the restraints placed on specific chunks... the chunks can
+be listed in any order.  As of right now... you cannot have multiple 
+occurances of the same type of chunk.  Future chunks may arise that can
+be listed mutiple times, however.
+
+
+     Now for the nitty-gritty on each chunk:
+
+
+----  'INFO' chunk  ----
+
+     This chunk MUST BE AT LEAST 8 bytes in size... enough to supply data up
+to the "Number of Tracks".  The rest of the data can be assumed if it's
+missing.
+
+
+WORD   Load Address
+WORD   Init Address
+WORD   Play Address
+BYTE   PAL/NTSC
+BYTE   Extra sound chip support
+BYTE   Number of Tracks
+BYTE   Initial Track
+
+
+Load Address = the area in ROM, in which to load the NSF data.
+               Should be between 0x8000 - 0xFFFF
+
+Init Address = address of the code that's run upon initialization of each track
+
+Play Address = address of the code that's called to play each track
+
+PAL/NTSC = Bitwise representation of whether the NSF is PAL or NTSC
+           if bit 0 is set   -> NSF is PAL
+           if bit 0 is clear -> NSF is NTSC
+           if bit 1 is set   -> Ignore bit 0, NSF is a dual PAL/NTSC
+           bits 2-7          -> Unknown.  Should be zero to allow for future
+                                expansion.
+           Essentially... this bit specifies what should be loaded into the X
+            Register upon loading the song.  (NTSC are inited with 0 in the
+            X Register, PAL tunes are inited with 1 in the X register).
+
+           Dual NTSC/PAL tunes may be played back as either NSTC or PAL.  It's
+            up to the player (or user).
+
+           In NTSC tunes, the play subroutine should be called about 60.1 times
+            a second (NTSC NMI frequency).  SEE SECTION 7 FOR SPECIFICS
+
+           In PAL tunes, the play subroutine should be called about 50 times a
+            second (PAL NMI frequency).  SEE SECTION 7 FOR SPECIFICS
+
+Extra Sound Chip support = Bitwise representation of additional sound chips
+           if bit 0 is set -> NSF uses Kanomi VRCVI audio   (examples:  Madara, Akumajou Densetsu)
+           if bit 1 is set -> NSF uses Kanomi VRCVII audio  (example:   Lagrange Point)
+           if bit 2 is set -> NSF uses FDS Sound            (examples:  Link No Bouken, Shin Onigashima)
+           if bit 3 is set -> NSF uses Nintendo MMC5 audio  (example:   Just Breed)
+           if bit 4 is set -> NSF uses Namco-106 audio      (example:   Sangokoushi 2)
+           if bit 5 is set -> NSF uses FME-07 audio         (example:   Gimmick!)
+           bits 6-7        -> Not used... should be 0 to allow for expansion
+
+           See nsfspec.txt for more details.
+
+
+Number of Tracks = The number of tracks contained in the NSF.  Must be at least
+                   1.  (Assume 1 if data doesn't exist)
+
+Initial Track = The first track to play upon playing the NSF.  Unlike the NSF
+                format, this number is zero-based.  So 0 = 1st track, 1 = 2nd
+                track, etc.  (Assume 0 if data doesn't exist)
+
+
+     Remember... if the data chunk was larger than expected... just ignore the
+rest.  More data may be added at a later date.
+
+** Note:  This chunk formerly contained info for NTSC playback speed, however
+     the recommended playback rate given in nsfespec.txt (0x411A) is inaccurate,
+     and thus most (if not all) NSF rips has bad timing.
+
+     Playback should occur at the rate of NMI for the system being emulated.
+
+
+
+
+----  'DATA' chunk  ----
+
+     This chunk contains the 6502 music code.  It should be loaded into ROM at
+the address specified by the Load Address in the 'INFO' chunk.
+
+
+
+----  'NEND' chunk  ----
+
+     This chunk signals the end of the file.  It should have a size of 0.
+
+
+
+----  'plst' chunk  ----
+
+     The plst (playlist) chunk specifies which order to play the tracks.. and
+what tracks to play.  Each byte in the chunk is the zero-based index of the song
+to play.  Once that song completes (or is skipped), the program should start the
+next song on the list.  When all the songs on the list have been played... the
+program should stop (thus, songs can be omitted from playback if they're not on
+the list.  So it may be a good idea for the user to be able to turn off the
+playlist option instead of having to alter their list all the time).
+
+    If a playlist exists... the Initial Track value specified in the 'INFO' chunk
+is ignored.
+
+
+
+
+----  'time' chunk  ----
+
+    The time chunk specifies the length of the song to be played.  It's stored
+as a list of ints.  Each int is the number of milliseconds for the song to play.
+If the value given is LESS THAN 0, the song should play indefinitly (or a default
+length as provided by your player).
+
+    Note that a length of zero is ACCEPTABLE.  Tracks with a length of zero should
+being fading out immediately.
+
+    The first int in the list is the value for the first track in the NSF -not-
+the first track in the playlist.  If not all tracks are included in the chunk,
+they are assumed to have a time less than 0 (indefinite, or default).
+
+
+
+
+----  'fade' chunk  ----
+
+    Very similar to the 'time' chunk, the 'fade' chunk is the length of the
+fade-out associated with each track.  The fade comes AFTER the play time... so
+if the play time is 30 seconds, and the fade time is 1 second... the true length
+of the music played will be 31 seconds.
+
+    Data is stored just like the 'time' chunk:  a list of ints for each track,
+representing the length of the fade in milliseconds.
+
+    A fade time of zero is ACCEPTABLE.  Tracks with a fade of zero should abrputly
+stop when the song length has expired (common in sound effects or songs that
+eventually end).  A fade of less than zero signals for the player's default fade
+(or no fade) to be used.
+
+
+
+
+----  'tlbl' chunk  ----
+
+    The tlbl (track label) chunk contains a series of null-terminated strings,
+which are used as the names of each individual track.  If this chunk is absent,
+or if not all tracks are represented, they are assumed to have no label.. or
+some sort of generic label (like "Track 05"), however the program wants to
+interpret it.
+
+
+
+----  'auth' chunk  ----
+
+    The auth (author) chunk contains a few strings that holds information about
+the entire NSF in general (instead of by each specific track):
+
+string    Name of the Game
+string    Name of the Artist
+string    Name of the Copyright holder
+string    Name of the NSF ripper
+
+    Remember that not all 4 strings may be included... the chunk might stop
+after the 3rd string.  Non-existent or empty strings may be interpreted as
+some default value (nsfspec.txt said unknown fields should be "<?>" without
+quotes)
+
+    No field for the Ripper existed in the NSF format and so many NSFEs may
+lack this field.  It was added because I thought the people who did the
+hard work to bring us the NSF deserved to be acknowledged.  I strongly urge
+all who make NSFEs to fill this field.
+
+
+
+----  'BANK' chunk  ----
+
+
+    The BANK chunk contains bankswitching init values.  For more details,  see
+nsfspec.txt.
+
+    This chunk (if exists) should be 8 bytes in size.  If less, it can be
+assumed that the bytes are 0.  Likewise, if the BANK chunk is absent, it's
+assumed that all 8 bankswitching values are 0.
+
+    These bytes determine the initial bankswitching register values
+(0x5FF8-0x5FFF).  See nsfspec.txt for more details.
+
+
+
+
+5)   Expanding the file format
+=======================================
+
+    If people are ever willing to add other stuff.  Just follow the format given
+in section 3 to allow for backwards compatibility with NSFE players.
+
+
+6)   Notes and possible problems for NSF/NSFE playing
+=======================================
+
+
+ - The play routine should be called at the NMI rate of the system being emulated
+(see section 7).  SONG LENGTH AND FADE TIMES REFLECT THESE SPEEDS.  If you're
+playing a track with a length of 2 minutes at 60 Hz, (too slow) the song will be
+cut off too early.  In order to keep all times in sync and 'universal', all NSFs
+must follow this play speed.
+
+ - Recursive play calls should be prevented.  That is, if the time for another play
+call comes and the NSF still hasn't finished it's previous code execution, the play
+routine should not interrupt it.
+
+ - Some NSFs (DQ series comes to mind) execute a CLI but have an invalid IRQ vector.
+Hopefully these will get re-ripped to solve this problem.  It is recommended that
+players properly emulate IRQs generated by both the Frame counter and the DMC channel.
+
+ - Some NSFs occupy NMI and reset vectors... hopefully these will get re-ripped to
+solve this problem.  Having those vectors occupied will complicate getting
+the NSFs running on a real NES system.
+
+ - NSFs that use the MMC5 expansion chip have special multiplication registers.
+Failure to emulate this will result in those NSFs producing horrid sound.
+The values written to $5205 and $5206 are multiplied by the chip.  Reading $5205
+will return the low byte of the product, Reading $5206 will return the high byte
+of the product.
+
+ - Many expasion chips write to registers that share addressing space with ROM.
+Since ROM is "Read-Only Memory", the data at those positions must not be changed.
+
+
+
+
+7)   Playback timing info
+=======================================
+
+    To avoid sound playback timing issues, use these frequencies to call the play
+subroutine in the NSF.
+
+NTSC systems:  60.0988
+PAL systems:   50.0070
+
+
+    NTSC speed calculated:
+
+21477272.72 / (261*1364 + (1360+1364)/2) ~= 60.0988
+
+262 scanlines per frame, 1364 cycles per scanline (one scanline
+  goes between 1360 and 1364 each frame)
+
+
+
+
+    PAL speed calculated:
+
+
+26601714 / (312*1705) ~= 50.0070
+
+
+
+
+    Big big thanks to Xodnizel for this info.
+
+
+
+
+8)   Credits!
+=======================================
+
+
+Kevin Horton - for developing the NSF format (on which this format was based)
+
+All the people who went to all the trouble of reverse engineering the 2A03
+so that NSFs were possible.
+
+Xodnizel - Resolving timing issues, several format ideas.
+
+Disch - for the quick typeup of this format ^_^, who greatly hopes it will
+one day catch on.
+
+
+
+
+9)   Changes from previous revisions
+=======================================
+
+** Revision 2:  (Sep. 9, 2003)
+
+ - Removed the 1000000 dividing stuff that causes inaccurate and inconsistent sound.
+
+ - Clarified the proper speed for accurate song/fade lengths.
+
+ - Added missing bits in the Sound Chip byte in the INFO chunk.
+
+ - Added a short list of forseeable problems when making NSFE players.
+
+
+
+
+
+** Revision 1:  (???? ?? ????)
+ - Corrected a flaw that would prevent fade times of zero.
+
+
+
+
+
+** Original proposal release (???? ?? ????)
