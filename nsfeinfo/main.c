@@ -31,11 +31,21 @@ typedef struct s_chunk_plst_body_s {
 	uint8_t song;
 } s_chunk_plst_body_t;
 
-typedef struct s_chunk_time_body_s {} s_chunk_time_body_t;
-typedef struct s_chunk_fade_body_s {} s_chunk_fade_body_t;
-typedef struct s_chunk_tlbl_body_s {} s_chunk_tlbl_body_t;
-typedef struct s_chunk_auth_body_s {} s_chunk_auth_body_t;
-typedef struct s_chunk_bank_body_s {} s_chunk_bank_body_t;
+typedef struct s_chunk_time_body_s {
+	uint32_t msec;
+} s_chunk_time_body_t;
+
+typedef struct s_chunk_fade_body_s {
+	uint32_t msec;
+} s_chunk_fade_body_t;
+
+typedef uint8_t s_chunk_tlbl_body_t;
+
+typedef uint8_t s_chunk_auth_body_t;
+
+typedef struct s_chunk_bank_body_s {
+	uint8_t reg[8];
+} s_chunk_bank_body_t;
 
 typedef struct s_chunk_s {
 	/** size of chunk in bytes (does not include this value or the chunk ID) */
@@ -70,6 +80,11 @@ static int s_analyze_nsfe( const char *fpath );
 
 static int s_analyze_chunk_info( const s_chunk_info_body_t *info );
 static int s_analyze_chunk_plst( const s_chunk_plst_body_t *plst, uint32_t size );
+static int s_analyze_chunk_time( const s_chunk_time_body_t *time, uint32_t size );
+static int s_analyze_chunk_fade( const s_chunk_fade_body_t *fade, uint32_t size );
+static int s_analyze_chunk_tlbl( const s_chunk_tlbl_body_t *tlbl, uint32_t size );
+static int s_analyze_chunk_auth( const s_chunk_auth_body_t *auth, uint32_t size );
+static int s_analyze_chunk_bank( const s_chunk_bank_body_t *bank );
 
 int main(int argc, char *argv[])
 {
@@ -162,17 +177,21 @@ static int s_analyze_nsfe( const char *fpath )
 		}
 		if (memcmp(nsfe_chunk->id, S_CHUNK_TIME, strlen(S_CHUNK_TIME))==0)
 		{
+			s_analyze_chunk_time( &( nsfe_chunk->time), nsfe_chunk->size);
 		}
 		if (memcmp(nsfe_chunk->id, S_CHUNK_FADE, strlen(S_CHUNK_FADE))==0)
 		{
+			s_analyze_chunk_fade( &( nsfe_chunk->fade), nsfe_chunk->size);
 		}
 		if (memcmp(nsfe_chunk->id, S_CHUNK_TLBL, strlen(S_CHUNK_TLBL))==0)
 		{
+			s_analyze_chunk_tlbl( &( nsfe_chunk->tlbl), nsfe_chunk->size );
 		}
-		if (memcmp(nsfe_chunk->id, S_CHUNK_TLBL, strlen(S_CHUNK_AUTH))==0)
+		if (memcmp(nsfe_chunk->id, S_CHUNK_AUTH, strlen(S_CHUNK_AUTH))==0)
 		{
+			s_analyze_chunk_auth( &(nsfe_chunk->auth), nsfe_chunk->size);
 		}
-		if (memcmp(nsfe_chunk->id, S_CHUNK_TLBL, strlen(S_CHUNK_BANK))==0)
+		if (memcmp(nsfe_chunk->id, S_CHUNK_BANK, strlen(S_CHUNK_BANK))==0)
 		{
 		}
 		nsfe_chunk = ( s_chunk_t * )( ( uintptr_t )nsfe_chunk + nsfe_chunk->size + 8 );
@@ -209,7 +228,57 @@ static int s_analyze_chunk_plst( const s_chunk_plst_body_t *plst, uint32_t size 
 
 	for ( i = 0; i < size; i++ )
 	{
-		printf( "  playlist-%d: %u\n", i+1, plst[i].song );
+		printf( "  playlist-%u: [%u]\n", i+1, plst[i].song );
+	}
+
+	return 0;
+}
+
+static int s_analyze_chunk_time( const s_chunk_time_body_t *time, uint32_t size )
+{
+	uint32_t i;
+
+	for ( i = 0; i * sizeof(s_chunk_time_body_t) < size; i++ )
+	{
+		printf( "  time-%u: [%u]msec\n", i+1, time[i].msec );
+	}
+
+	return 0;
+}
+
+static int s_analyze_chunk_fade( const s_chunk_fade_body_t *fade, uint32_t size )
+{
+	uint32_t i;
+
+	for ( i = 0; i * sizeof(s_chunk_fade_body_t) < size; i++ )
+	{
+		printf( "  fade%u: [%u]msec\n", i+1, fade[i].msec );
+	}
+
+	return 0;
+}
+
+static int s_analyze_chunk_tlbl( const s_chunk_tlbl_body_t *tlbl, uint32_t size )
+{
+	int i;
+	const uint8_t *p;
+
+	for ( i = 0, p = tlbl; (uintptr_t)p - (uintptr_t)tlbl < size; i++, p += strlen( p ) + 1 )
+	{
+		printf( "  song label-%d: [%s]\n", i+1, p );
+	}
+
+	return 0;
+}
+
+static int s_analyze_chunk_auth( const s_chunk_auth_body_t *auth, uint32_t size )
+{
+	int i;
+	const uint8_t *p;
+
+	for ( i = 0, p = auth; (uintptr_t)p - (uintptr_t)auth < size; i++, p += strlen( p ) + 1 )
+	{
+		printf( "  auth-%d: [%s]\n", i+1, p );
 	}
 
 	return 0;
