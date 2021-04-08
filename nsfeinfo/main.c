@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #define S_NSFE_MAGIC "NSFE"
 
