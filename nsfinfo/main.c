@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 
 static int s_analyze_nsf( const char *fpath );
 
